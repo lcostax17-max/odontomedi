@@ -213,6 +213,7 @@ async function fbSaveConfig() {
     im:          config.im          || '',
     segment:     config.segment     || 'Varejo e Atacado',
     address:     config.address     || '',
+    logoBase64:  config.logoBase64  || '',
   };
   const { data, error } = await supabaseClient
     .from('config')
@@ -1305,6 +1306,7 @@ async function saveSettings() {
       im:          config.im,
       segment:     config.segment,
       address:     config.address,
+      logoBase64:  config.logoBase64 || '',
     };
     const { error } = await supabaseClient
       .from('config')
@@ -1760,8 +1762,10 @@ document.addEventListener('DOMContentLoaded', function init() {
 
     // ── Config — Supabase SEMPRE tem prioridade sobre cache local ──
     if (!cfgRes.error && cfgRes.data) {
-      const localLogo = cacheRead(LC.config)?.logoBase64 || '';
-      config = { ...DEFAULT_CONFIG, ...cfgRes.data, logoBase64: localLogo };
+      // Logo: prioriza Supabase; fallback para cache local
+      const supabaseLogo = cfgRes.data.logoBase64 || '';
+      const localLogo    = cacheRead(LC.config)?.logoBase64 || '';
+      config = { ...DEFAULT_CONFIG, ...cfgRes.data, logoBase64: supabaseLogo || localLogo };
       cacheWrite(LC.config, config);
       console.log('Config carregada do Supabase:', config.company, config.whatsapp);
     } else {
