@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OdontoMedi Center — Catálogo de Produtos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- NAVBAR -->
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-icon">🦷</div>
+      <div>
+        <div class="nav-brand">OdontoMedi</div>
+        <div class="nav-sub">CENTER</div>
+      </div>
+    </div>
+    <button class="nav-btn active" id="nb-catalog"   onclick="switchView('catalog')">🛒 Catálogo</button>
+    <!-- Botões só visíveis para ADM -->
+    <button class="nav-btn adm-only" id="nb-admin"     onclick="switchView('admin')"     style="display:none">⚙️ Gerenciar</button>
+    <button class="nav-btn adm-only" id="nb-orders"    onclick="switchView('orders')"    style="display:none">📋 Pedidos</button>
+    <button class="nav-btn adm-only" id="nb-generator" onclick="switchView('generator')" style="display:none">📄 Catálogo PDF</button>
+    <button class="cart-nav-btn"   id="cart-btn"     onclick="openCart()">
+      🛒 <span class="cart-badge" id="cart-badge">0</span>
+    </button>
+    <!-- Login / Logout -->
+    <button class="nav-btn adm-only" id="btn-logout" onclick="adminLogout()" style="display:none;background:rgba(255,255,255,.1);color:rgba(255,255,255,.7)">🔓 Sair</button>
+    <button class="settings-btn adm-only" id="btn-settings" onclick="openSettings()" style="display:none" title="Configurações">⚙️</button>
+    <button class="nav-login-btn" id="btn-login" onclick="openLogin()" title="Área Administrativa">🔒</button>
+  </nav>
+
+  <!-- VIEWS -->
+  <div id="view-catalog"   class="wrap"></div>
+  <div id="view-admin"     class="wrap" style="display:none"></div>
+  <div id="view-orders"    class="wrap" style="display:none"></div>
+  <div id="view-generator" class="wrap" style="display:none"></div>
+
+  <!-- LOGIN MODAL -->
+  <div id="login-bg" class="modal-bg" onclick="closeLoginIfBg(event)">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header" style="border-radius:18px 18px 0 0">
+        <span>🔒 Área Administrativa</span>
+        <button class="modal-close" onclick="closeLogin()">×</button>
+      </div>
+      <div class="modal-body" style="gap:20px">
+        <div style="text-align:center;padding:8px 0 4px">
+          <div style="font-size:48px;margin-bottom:8px">🦷</div>
+          <div style="font-weight:800;color:var(--navy);font-size:15px">OdontoMedi Center</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Acesso restrito a administradores</div>
+        </div>
+        <div class="form-group">
+          <label for="login-user">Usuário</label>
+          <input id="login-user" placeholder="Digite seu usuário" onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+        </div>
+        <div class="form-group">
+          <label for="login-pass">Senha</label>
+          <input id="login-pass" type="password" placeholder="Digite sua senha" onkeydown="if(event.key==='Enter') doLogin()">
+        </div>
+        <div id="login-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;color:#b91c1c;text-align:center">
+          ❌ Usuário ou senha incorretos
+        </div>
+        <div class="modal-footer" style="border-top:none;padding-top:0">
+          <button class="btn-primary" onclick="doLogin()" style="flex:1;padding:12px">🔓 Entrar</button>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--muted)">
+          Para alterar credenciais, edite o arquivo <code>app.js</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT DETAIL MODAL -->
+  <div id="detail-bg" class="modal-bg" onclick="closeDetailIfBg(event)">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <span id="detail-header-label">Detalhes</span>
+        <button class="modal-close" onclick="closeDetail()">×</button>
+      </div>
+      <div id="detail-body" class="detail-body"></div>
+    </div>
+  </div>
+
+  <!-- CART SIDEBAR -->
+  <div id="cart-overlay" class="cart-overlay" onclick="closeCartIfBg(event)">
+    <div class="cart-sidebar">
+      <div class="cart-header">
+        <span>🛒 Meu Pedido</span>
+        <button class="modal-close" onclick="closeCart()">×</button>
+      </div>
+      <div class="cart-body" id="cart-body"></div>
+      <div class="cart-footer" id="cart-footer"></div>
+    </div>
+  </div>
+
+  <!-- CHECKOUT MODAL -->
+  <div id="checkout-bg" class="modal-bg" onclick="closeCheckoutIfBg(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <span>📋 Finalizar Pedido</span>
+        <button class="modal-close" onclick="closeCheckout()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="co-name">Seu Nome *</label>
+          <input id="co-name" placeholder="Ex: João Silva">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="co-phone">Telefone *</label>
+            <input id="co-phone" placeholder="(00) 00000-0000">
+          </div>
+          <div class="form-group">
+            <label for="co-cpf">CPF *</label>
+            <input id="co-cpf" placeholder="000.000.000-00" maxlength="14" oninput="maskCPF(this)">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="co-company">Empresa / Clínica</label>
+          <input id="co-company" placeholder="Opcional">
+        </div>
+        <div class="form-group">
+          <label for="co-notes">Observações</label>
+          <textarea id="co-notes" placeholder="Prazo, pagamento, endereço de entrega..."></textarea>
+        </div>
+        <div id="co-summary" class="order-summary"></div>
+        <div class="modal-footer">
+          <button class="btn-whatsapp" onclick="sendWhatsApp()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            Enviar via WhatsApp
+          </button>
+          <button class="btn-ghost" onclick="closeCheckout()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANUAL ORDER MODAL -->
+  <div id="manual-bg" class="modal-bg" onclick="closeManualIfBg(event)">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <span id="manual-title">📝 Lançar Pedido</span>
+        <button class="modal-close" onclick="closeManual()">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="mo-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="mo-name">Nome do Cliente *</label>
+            <input id="mo-name" placeholder="Ex: João Silva">
+          </div>
+          <div class="form-group">
+            <label for="mo-phone">Telefone</label>
+            <input id="mo-phone" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="mo-company">Empresa / Clínica</label>
+            <input id="mo-company" placeholder="Opcional">
+          </div>
+          <div class="form-group">
+            <label for="mo-status">Status do Pedido</label>
+            <select id="mo-status">
+              <option value="pendente">⏳ Pendente</option>
+              <option value="confirmado">✅ Confirmado</option>
+              <option value="enviado">🚚 Enviado</option>
+              <option value="entregue">📦 Entregue</option>
+              <option value="cancelado">❌ Cancelado</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Itens do Pedido</label>
+          <div id="mo-items-list" class="mo-items"></div>
+          <div class="mo-add-row">
+            <select id="mo-prod-select" style="flex:2">
+              <option value="">Selecione um produto...</option>
+            </select>
+            <input id="mo-qty-input" type="number" min="1" value="1" placeholder="Qtd" style="flex:.5;min-width:68px">
+            <button class="btn-primary" onclick="addManualItem()" style="white-space:nowrap">+ Adicionar</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="mo-notes">Observações</label>
+          <textarea id="mo-notes" placeholder="Forma de pagamento, prazo de entrega, etc."></textarea>
+        </div>
+        <div id="mo-total-box" class="order-summary"></div>
+        <div class="modal-footer">
+          <button class="btn-primary" onclick="saveManualOrder()">💾 Salvar Pedido</button>
+          <button class="btn-ghost" onclick="closeManual()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT FORM MODAL -->
+  <div id="modal-bg" class="modal-bg" onclick="closeModalIfBg(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <span id="modal-title">Produto</span>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="f-id">
+        <div class="form-group">
+          <label for="f-name">Nome do Produto *</label>
+          <input id="f-name" placeholder="Ex: Luva Nitrílica G">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-category">Categoria *</label>
+            <select id="f-category">
+              <option value="descartaveis">🧤 Descartáveis</option>
+              <option value="limpeza">🧴 Limpeza</option>
+              <option value="equipamentos">🔬 Equipamentos</option>
+              <option value="odontologico">🦷 Odontológico</option>
+              <option value="hospitalar">🏨 Hospitalar</option>
+              <option value="epi">🦺 EPI</option>
+              <option value="penso">🩹 Curativo / Penso</option>
+              <option value="outros">📦 Outros</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="f-unit">Unidade / Embalagem</label>
+            <input id="f-unit" placeholder="Ex: Caixa c/ 100 un.">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="f-description">Descrição</label>
+          <textarea id="f-description" placeholder="Especificações, diferenciais, composição..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-price">Preço Normal (R$) *</label>
+            <input id="f-price" type="number" step="0.01" min="0" placeholder="0,00">
+          </div>
+          <div class="form-group">
+            <label for="f-promo">Preço Promocional (R$)</label>
+            <input id="f-promo" type="number" step="0.01" min="0" placeholder="Sem promoção">
+          </div>
+        </div>
+
+        <!-- ESTOQUE -->
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">📦 Controle de Estoque</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="f-stock">Quantidade em Estoque</label>
+              <input id="f-stock" type="number" min="0" step="1" placeholder="Ex: 50" oninput="checkStockAlert()">
+            </div>
+            <div class="form-group">
+              <label for="f-minstock">Estoque Mínimo (alerta)</label>
+              <input id="f-minstock" type="number" min="0" step="1" placeholder="Ex: 10" oninput="checkStockAlert()">
+            </div>
+          </div>
+          <div id="stock-alert-preview" style="display:none;margin-top:8px;padding:8px 12px;background:#fef9c3;border-radius:6px;font-size:12px;font-weight:700;color:#854d0e">
+            ⚠️ Atenção: quantidade atual está abaixo ou no limite mínimo
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Fotos do Produto</label>
+          <div id="f-images-wrap" class="images-wrap">
+            <!-- imagens adicionadas dinamicamente -->
+          </div>
+          <button type="button" class="btn-ghost" onclick="addImageField()" style="margin-top:8px;font-size:12px;padding:7px 16px;width:100%">+ Adicionar Foto</button>
+        </div>
+        <div class="form-group">
+          <label for="f-video">URL do Vídeo (YouTube / Vimeo)</label>
+          <input id="f-video" placeholder="https://youtube.com/watch?v=...">
+        </div>
+        <div class="toggles-row">
+          <div class="toggle-wrap">
+            <label class="toggle"><input type="checkbox" id="f-instock" checked><span class="toggle-slider"></span></label>
+            <span>Em estoque</span>
+          </div>
+          <div class="toggle-wrap">
+            <label class="toggle"><input type="checkbox" id="f-featured"><span class="toggle-slider"></span></label>
+            <span>Destaque</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" onclick="saveProduct()">💾 Salvar Produto</button>
+          <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-bg" class="modal-bg" onclick="closeSettingsIfBg(event)">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <span>⚙️ Configurações da Empresa</span>
+        <button class="modal-close" onclick="closeSettings()">×</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- LOGO -->
+        <div class="settings-section-title">Identidade Visual</div>
+        <div class="logo-upload-area">
+          <div id="logo-preview-wrap" class="logo-preview-wrap">
+            <img id="s-logo-preview" class="logo-preview-img" alt="Logo" style="display:none">
+            <div id="logo-placeholder" class="logo-placeholder">🏢<br><small>Sem logo</small></div>
+          </div>
+          <div style="flex:1">
+            <label class="form-group-label">Logo da Empresa</label>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Envie o arquivo PNG, JPG ou SVG. A logo aparecerá na capa e contracapa do catálogo.</p>
+            <div style="display:flex;gap:8px">
+              <button class="btn-primary" onclick="document.getElementById('logo-file-input').click()" style="font-size:12px;padding:8px 16px">📁 Escolher Arquivo</button>
+              <button class="btn-ghost" onclick="clearLogo()" style="font-size:12px;padding:8px 14px">✕ Remover</button>
+            </div>
+            <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
+          </div>
+        </div>
+
+        <!-- EMPRESA -->
+        <div class="settings-section-title" style="margin-top:4px">Dados da Empresa</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-company">Nome Fantasia *</label>
+            <input id="s-company" placeholder="Ex: OdontoMedi Center">
+          </div>
+          <div class="form-group">
+            <label for="s-segment">Segmento</label>
+            <select id="s-segment">
+              <option value="Varejo">Varejo</option>
+              <option value="Atacado">Atacado</option>
+              <option value="Varejo e Atacado">Varejo e Atacado</option>
+              <option value="Distribuidora">Distribuidora</option>
+              <option value="Distribuidora Hospitalar">Distribuidora Hospitalar</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-razao">Razão Social</label>
+            <input id="s-razao" placeholder="Ex: OdontoMedi Distribuidora Ltda">
+          </div>
+          <div class="form-group">
+            <label for="s-cnpj">CNPJ</label>
+            <input id="s-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="maskCNPJ(this)">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-ie">Inscrição Estadual</label>
+            <input id="s-ie" placeholder="Ex: 123.456.789.000">
+          </div>
+          <div class="form-group">
+            <label for="s-im">Inscrição Municipal</label>
+            <input id="s-im" placeholder="Ex: 12345">
+          </div>
+        </div>
+
+        <!-- CONTATO -->
+        <div class="settings-section-title" style="margin-top:4px">Contato e Localização</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-whatsapp">WhatsApp (DDI + DDD + número) *</label>
+            <input id="s-whatsapp" placeholder="Ex: 5574998067720">
+            <small style="color:var(--muted);font-size:11px;margin-top:3px;display:block">55 + DDD + número. Ex: <strong>5574998067720</strong></small>
+          </div>
+          <div class="form-group">
+            <label for="s-phone">Telefone Fixo</label>
+            <input id="s-phone" placeholder="(74) 3600-0000">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="s-email">E-mail</label>
+            <input id="s-email" type="email" placeholder="contato@empresa.com.br">
+          </div>
+          <div class="form-group">
+            <label for="s-site">Site</label>
+            <input id="s-site" placeholder="www.empresa.com.br">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="s-address">Endereço Completo</label>
+          <textarea id="s-address" rows="2" placeholder="Av. Exemplo, 275 — Bairro, Cidade/UF. CEP: 00000-000"></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-primary" onclick="saveSettings()">💾 Salvar Configurações</button>
+          <button class="btn-ghost" onclick="closeSettings()">Cancelar</button>
+        </div>
+
+        <!-- SEGURANÇA -->
+        <div style="border-top:2px solid var(--border);padding-top:20px;margin-top:4px">
+          <div class="settings-section-title">🔐 Alterar Senha de Acesso</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+            Usuário atual: <strong id="current-user-label" style="color:var(--navy)">—</strong>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pw-current">Senha Atual *</label>
+              <input id="pw-current" type="password" placeholder="Digite a senha atual">
+            </div>
+            <div class="form-group">
+              <label for="pw-new">Nova Senha *</label>
+              <input id="pw-new" type="password" placeholder="Mínimo 6 caracteres">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pw-confirm">Confirmar Nova Senha *</label>
+              <input id="pw-confirm" type="password" placeholder="Repita a nova senha">
+            </div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:1px">
+              <button class="btn-primary" onclick="changePassword()" style="width:100%;padding:9px">🔑 Alterar Senha</button>
+            </div>
+          </div>
+          <div id="pw-feedback" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:700;margin-top:4px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINT PREVIEW -->
+  <div id="preview-overlay" class="preview-overlay">
+    <div class="preview-bar">
+      <div class="preview-title">📄 Pré-visualização do Catálogo</div>
+      <button class="btn-yellow" onclick="printCatalog()">🖨️ Imprimir / Salvar PDF</button>
+      <button class="btn-outline-white" onclick="closePrev()">✕ Fechar</button>
+    </div>
+    <div class="preview-body" id="preview-body"></div>
+  </div>
+
+  <!-- Hidden file input for Excel import -->
+  <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none" onchange="handleExcelImport(event)">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
