@@ -1218,7 +1218,6 @@ function changePassword() {
 
 async function saveSettings() {
   try {
-    // Lê campos com null-check defensivo
     const g = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
 
     config.whatsapp    = g('s-whatsapp').replace(/\D/g,'');
@@ -1233,24 +1232,37 @@ async function saveSettings() {
     config.address     = g('s-address');
     const segEl = document.getElementById('s-segment');
     if (segEl) config.segment = segEl.value;
-    // logoBase64 já está em config via handleLogoUpload
 
-    // Salva no localStorage IMEDIATAMENTE — independe do Firebase
-    try {
-      localStorage.setItem('om:cache:config', JSON.stringify(config));
-    } catch(le) { console.warn('localStorage error:', le); }
+    // Salva no localStorage imediatamente
+    try { localStorage.setItem('om:cache:config', JSON.stringify(config)); } catch(_) {}
 
-    // Fecha o modal e confirma — não espera Firebase
+    // Salva no Supabase e aguarda confirmação
+    const payload = {
+      id:          'main',
+      whatsapp:    config.whatsapp,
+      phone:       config.phone,
+      email:       config.email,
+      site:        config.site,
+      company:     config.company,
+      razaoSocial: config.razaoSocial,
+      cnpj:        config.cnpj,
+      ie:          config.ie,
+      im:          config.im,
+      segment:     config.segment,
+      address:     config.address,
+    };
+    const { error } = await supabaseClient
+      .from('config')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) throw error;
+
     closeSettings();
     showToast('✅ Configurações salvas!');
 
-    // Envia ao Firebase em background (sem bloquear nem quebrar nada)
-    // Salva config no Supabase em background
-    fbSaveConfig().catch(e => console.warn('Supabase config (background):', e.message));
-
   } catch(e) {
     console.error('saveSettings error:', e);
-    showToast('❌ Erro inesperado: ' + e.message);
+    showToast('❌ Erro ao salvar: ' + e.message);
   }
 }
 
