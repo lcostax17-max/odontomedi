@@ -178,11 +178,27 @@ async function fbUpdateOrderStatus(id, status) {
 
 // Config
 async function fbSaveConfig() {
-  const payload = { id: 'main', ...config };
-  const { error } = await supabaseClient
+  // Envia apenas campos conhecidos — nunca logoBase64 (não existe no Supabase)
+  const payload = {
+    id:          'main',
+    whatsapp:    config.whatsapp    || '',
+    phone:       config.phone       || '',
+    email:       config.email       || '',
+    site:        config.site        || '',
+    company:     config.company     || 'OdontoMedi Center',
+    razaoSocial: config.razaoSocial || '',
+    cnpj:        config.cnpj        || '',
+    ie:          config.ie          || '',
+    im:          config.im          || '',
+    segment:     config.segment     || 'Varejo e Atacado',
+    address:     config.address     || '',
+  };
+  const { data, error } = await supabaseClient
     .from('config')
-    .upsert(payload, { onConflict: 'id' });
-  if (error) throw error;
+    .upsert(payload, { onConflict: 'id' })
+    .select();
+  if (error) { console.error('fbSaveConfig error:', error); throw error; }
+  console.log('Config salva no Supabase:', data);
 }
 
 // Seed sample data on first run
@@ -1700,13 +1716,15 @@ document.addEventListener('DOMContentLoaded', function init() {
       }
     }
 
-    // ── Config ──
+    // ── Config — Supabase SEMPRE tem prioridade sobre cache local ──
     if (!cfgRes.error && cfgRes.data) {
       const localLogo = cacheRead(LC.config)?.logoBase64 || '';
       config = { ...DEFAULT_CONFIG, ...cfgRes.data, logoBase64: localLogo };
       cacheWrite(LC.config, config);
-    } else if (!cachedConfig) {
+      console.log('Config carregada do Supabase:', config.company, config.whatsapp);
+    } else {
       // Sem config no Supabase → gravar padrão
+      console.warn('Config não encontrada no Supabase, gravando padrão...', cfgRes.error);
       fbSaveConfig().catch(e => console.warn('Config seed error:', e));
     }
 
