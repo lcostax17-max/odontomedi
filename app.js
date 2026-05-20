@@ -474,23 +474,7 @@ async function sendWhatsApp() {
       })),
       total,
     };
-    fbSaveOrder(order)
-      .then(() => {
-        // Dá baixa no estoque de cada produto pedido (se tiver controle ativo)
-        snapshot.forEach(({ product: p, qty }) => {
-          if (p.currentStock != null && p.currentStock > 0) {
-            const novoEstoque = Math.max(0, p.currentStock - qty);
-            const updateData  = { currentStock: novoEstoque };
-            // Se zerou, marca como fora de estoque
-            if (novoEstoque === 0) updateData.inStock = false;
-            supabaseClient.from('products')
-              .update(updateData)
-              .eq('id', p.id)
-              .then(({ error }) => { if (error) console.warn('Erro baixa estoque:', error); });
-          }
-        });
-      })
-      .catch(e => console.warn('Erro ao salvar pedido:', e));
+    fbSaveOrder(order).catch(e => console.warn('Erro ao salvar pedido:', e));
 
   } catch(e) {
     console.error('sendWhatsApp error:', e);
@@ -840,6 +824,24 @@ function renderOrders() {
 
 async function updateOrderStatus(id, status) {
   try {
+    const order = orders.find(o => o.id === id);
+
+    // Dá baixa no estoque SOMENTE ao confirmar
+    if (status === 'confirmado' && order && order.status !== 'confirmado') {
+      for (const item of order.items) {
+        const p = products.find(x => x.id === item.productId);
+        if (p && p.currentStock != null) {
+          const novoEstoque = Math.max(0, p.currentStock - item.qty);
+          const updateData  = { currentStock: novoEstoque };
+          if (novoEstoque === 0) updateData.inStock = false;
+          const { error } = await supabaseClient
+            .from('products').update(updateData).eq('id', p.id);
+          if (error) console.warn('Erro baixa estoque:', error);
+          else showToast(`📦 Estoque de "${p.name}" atualizado: ${novoEstoque}`);
+        }
+      }
+    }
+
     await fbUpdateOrderStatus(id, status);
     showToast('✅ Status atualizado');
   } catch(e) { showToast('❌ Erro: ' + e.message); }
