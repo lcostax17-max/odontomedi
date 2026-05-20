@@ -968,22 +968,20 @@ async function handleExcelImport(event) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
       const validIds = new Set(CATS.slice(1).map(c=>c.id));
       const lblToId  = Object.fromEntries(CATS.slice(1).map(c=>[c.label.toLowerCase(),c.id]));
-      const batch    = db.batch();
-      let count = 0;
+      const batch = [];
       rows.forEach(row => {
         const name  = String(row['Nome']||'').trim();
         const price = parseFloat(String(row['Preco']||'').replace(',','.'));
         if (!name || !price || price <= 0) return;
-        const catRaw  = String(row['Categoria_ID']||row['Categoria']||'').trim().toLowerCase();
-        const cat     = validIds.has(catRaw) ? catRaw : (lblToId[catRaw]||'outros');
-        const promo   = parseFloat(String(row['Preco_Promocional']||'').replace(',','.'));
-        const id      = genId();
-        const data    = { id, name, category:cat, unit:String(row['Unidade_Embalagem']||'').trim(), description:String(row['Descricao']||'').trim(), price, promoPrice:(!isNaN(promo)&&promo>0)?promo:null, imageUrl:String(row['URL_Imagem']||'').trim(), videoUrl:String(row['URL_Video']||'').trim(), inStock:String(row['Em_Estoque']||'Sim').toLowerCase()!=='não', featured:String(row['Destaque']||'').toLowerCase()==='sim', createdAt:Date.now() };
-        batch.set(productsCol.doc(id), data);
-        count++;
+        const catRaw = String(row['Categoria_ID']||row['Categoria']||'').trim().toLowerCase();
+        const cat    = validIds.has(catRaw) ? catRaw : (lblToId[catRaw]||'outros');
+        const promo  = parseFloat(String(row['Preco_Promocional']||'').replace(',','.'));
+        batch.push({ id: genId(), name, category:cat, unit:String(row['Unidade_Embalagem']||'').trim(), description:String(row['Descricao']||'').trim(), price, promoPrice:(!isNaN(promo)&&promo>0)?promo:null, imageUrl:String(row['URL_Imagem']||'').trim(), videoUrl:String(row['URL_Video']||'').trim(), inStock:String(row['Em_Estoque']||'Sim').toLowerCase()!=='não', featured:String(row['Destaque']||'').toLowerCase()==='sim', createdAt:Date.now() });
       });
-      await batch.commit();
-      showToast(`✅ ${count} produto(s) importado(s)!`);
+      if (!batch.length) { showToast('⚠️ Nenhum produto válido encontrado'); return; }
+      const { error } = await supabaseClient.from('products').upsert(batch, { onConflict: 'id' });
+      if (error) throw error;
+      showToast(`✅ ${batch.length} produto(s) importado(s)!`);
     } catch(err) { alert('Erro ao importar: ' + err.message); }
   };
   reader.readAsBinaryString(file);
@@ -1247,12 +1245,8 @@ async function saveSettings() {
     showToast('✅ Configurações salvas!');
 
     // Envia ao Firebase em background (sem bloquear nem quebrar nada)
-    if (typeof configDoc !== 'undefined' && configDoc) {
-      const sem = Object.fromEntries(
-        Object.entries(config).filter(([k]) => k !== 'logoBase64')
-      );
-      configDoc.set(sem).catch(e => console.warn('Firebase config (background):', e.message));
-    }
+    // Salva config no Supabase em background
+    fbSaveConfig().catch(e => console.warn('Supabase config (background):', e.message));
 
   } catch(e) {
     console.error('saveSettings error:', e);
