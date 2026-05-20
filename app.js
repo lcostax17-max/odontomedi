@@ -48,7 +48,7 @@ const ADM_USERS_DEFAULT = [
 ];
 // ─────────────────────────────────────────────────────────
 
-// Carrega credenciais (localStorage sobrepõe os padrões)
+// Carrega credenciais — localStorage como cache, Supabase como fonte verdadeira
 function loadCredentials() {
   try {
     const saved = localStorage.getItem('om:admin:creds');
@@ -56,7 +56,28 @@ function loadCredentials() {
   } catch(_) { return ADM_USERS_DEFAULT; }
 }
 function saveCredentials(creds) {
+  // Salva localmente
   try { localStorage.setItem('om:admin:creds', JSON.stringify(creds)); } catch(_) {}
+  // Salva no Supabase para sincronizar entre dispositivos
+  if (supabaseClient) {
+    supabaseClient.from('config')
+      .upsert({ id: 'main', adminCreds: JSON.stringify(creds) }, { onConflict: 'id' })
+      .then(({ error }) => {
+        if (error) console.warn('Erro ao salvar credenciais no Supabase:', error);
+        else console.log('Credenciais salvas no Supabase');
+      });
+  }
+}
+// Carrega credenciais do Supabase ao iniciar
+async function syncCredentialsFromSupabase() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('config').select('adminCreds').eq('id', 'main').single();
+    if (!error && data?.adminCreds) {
+      const creds = JSON.parse(data.adminCreds);
+      localStorage.setItem('om:admin:creds', JSON.stringify(creds));
+    }
+  } catch(_) {}
 }
 
 // ── SAMPLE DATA (usada apenas na 1ª execução) ─────────────
@@ -441,7 +462,7 @@ async function sendWhatsApp() {
     closeCheckout();
     showToast('Abrindo WhatsApp...');
 
-    // Salva pedido no Firebase em background (após abrir WA)
+    // Salva pedido no Supabase em background
     const order = {
       id: genId(), date: new Date().toISOString(),
       customer: { name, phone, cpf, company }, notes,
@@ -453,7 +474,23 @@ async function sendWhatsApp() {
       })),
       total,
     };
-    fbSaveOrder(order).catch(e => console.warn('Erro ao salvar pedido:', e));
+    fbSaveOrder(order)
+      .then(() => {
+        // Dá baixa no estoque de cada produto pedido (se tiver controle ativo)
+        snapshot.forEach(({ product: p, qty }) => {
+          if (p.currentStock != null && p.currentStock > 0) {
+            const novoEstoque = Math.max(0, p.currentStock - qty);
+            const updateData  = { currentStock: novoEstoque };
+            // Se zerou, marca como fora de estoque
+            if (novoEstoque === 0) updateData.inStock = false;
+            supabaseClient.from('products')
+              .update(updateData)
+              .eq('id', p.id)
+              .then(({ error }) => { if (error) console.warn('Erro baixa estoque:', error); });
+          }
+        });
+      })
+      .catch(e => console.warn('Erro ao salvar pedido:', e));
 
   } catch(e) {
     console.error('sendWhatsApp error:', e);
@@ -1671,6 +1708,9 @@ document.addEventListener('DOMContentLoaded', function init() {
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   syncIndicator(true);
+
+  // 2.1 Sincronizar credenciais de admin do Supabase
+  syncCredentialsFromSupabase();
 
   // 3. Carregar dados iniciais via fetch
   Promise.all([
